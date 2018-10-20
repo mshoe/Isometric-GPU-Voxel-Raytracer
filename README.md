@@ -3,6 +3,8 @@
 
 A parking lot looking building rendered from my engine.
 
+[Video demo with voxel selection via raycasting the mouse](https://youtu.be/5lf5ftyHCI8)
+
 Using:
 - ModernGL for the OpenGL interface
 - PyGame for window and context creation

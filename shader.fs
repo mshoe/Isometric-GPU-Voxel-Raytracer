@@ -271,19 +271,6 @@ void ray_trace(vec3 rs, vec3 rv,
 	return;
 }
 
-float mousePos(in vec2 mouse, in vec2 st) {
-	// create a glow around the mouse cursor
-
-	float x = mouse.x;
-	float y = mouse.y;
-	float radius = 0.2;
-	return 
-		(smoothstep(x - radius, x, st.x) -
-		smoothstep(x, x + radius, st.x)) *
-		(smoothstep(y - radius, y, st.y) -
-		smoothstep(y, y + radius, st.y));
-}
-
 void get_edge_vectors( 	vec3 n_dir, vec3 u_dir, vec3 v_dir, vec3 pos, 
 						out vec4 va, out vec4 vc) {
 
@@ -373,7 +360,42 @@ float calcOcc(	vec2 uv,
 	//wb = vec4(0.0);
 	return 	wa.x + wa.y + wa.z + wa.w + 
 			wb.x + wb.y + wb.z + wb.w;
+}
 
+bool hover_voxel(	vec2 mouse, vec2 fc, vec3 iso_dir, mat3 rotation,
+					int st_i, int st_j, int st_k) {
+	// create a glow around the mouse cursor
+
+	float x = mouse.x;
+	float y = mouse.y;
+
+	// check if the mouse is near the frag coordinate
+	if ((step(x - VOX_W * 2.0, fc.x) -
+		step(x + VOX_W * 2.0, fc.x)) *
+		(step(y - VOX_H * 2.0, fc.y) -
+		step(y + VOX_H * 2.0, fc.y)) < 0.99) {
+		return false;
+	}
+
+	vec3 rs, rv, rs_onvoxel;
+	construct_ray(mouse.xy, iso_dir, rotation, rs, rv);
+
+	float t;
+	int i, j, k;
+	vec3 n_dir;
+	
+	find_starting_voxel(rs, rv, rs_onvoxel, i, j, k, t);
+	if (t > 0.0) {
+		int blockID;
+		ray_trace(rs_onvoxel, rv, i, j, k, t, n_dir, blockID);
+
+		if (st_i == i && st_j == j && st_k == k && blockID != 0) {
+			
+			return true;
+		}
+	}
+
+	return false;
 }
 
 void main()
@@ -381,10 +403,11 @@ void main()
 
 	vec3 debugColor = vec3(0.0, 0.0, 0.0);
 	vec3 color = vec3(0.0, 0.0, 0.0);
+	vec3 hover_color = vec3(0.0);
 
 	vec2 st = gl_FragCoord.xy / iResolution;
 	float time = iTime;
-	float mouse = mousePos(iMouse.xy / iResolution, st);
+	//float mouse = mousePos(iMouse.xy / iResolution, st);
 
 
 	vec3 rs, rv; // the vectors describing the ray P(t) = S + tV
@@ -403,27 +426,7 @@ void main()
 	float t;
 	int i, j, k;
 	vec3 n_dir;
-	vec2 uv;
-
-	// BRUTE FORCE ALGORITHM
-	/*
-	for (i = 0; i < CHUNK_W; i++) {
-		for ( j = 0; j < CHUNK_H; j++) {
-			for (k = 0; k < CHUNK_W; k++) {
-				if (simple_world(i, j, k) == 1) {
-					voxel_intersect(rs, rv, 
-						float(i), float(j), float(k), 
-						VOX_W, VOX_H, 
-						t, face, uv);
-
-					if (t > 0.0) {
-						color.x = 1.0;
-					}
-				}
-			}
-		}
-	}
-	*/
+	
 	vec3 rs_onvoxel;
 	find_starting_voxel(rs, rv, rs_onvoxel, i, j, k, t);
 	
@@ -438,13 +441,14 @@ void main()
 #endif
 
 	if (t > 0.0) {
-		int blockID = 1;
+		int blockID;
 		ray_trace(rs_onvoxel, rv, i, j, k, t, n_dir, blockID);
 
 
 		if (blockID != 0) {
 			t = 0.0;
 			vec3 u_dir, v_dir;
+			vec2 uv;
 			voxel_intersect(rs, rv, i, j, k, VOX_W, VOX_H, t, n_dir, uv, u_dir, v_dir);
 			vec4 va, vb, vc, vd;
 			find_surrounding_voxels(n_dir, u_dir, v_dir, i, j, k, va, vb, vc, vd);
@@ -452,15 +456,27 @@ void main()
 			color.x = 1.0;
 			vec4 v0 = vec4(0.0);
 			//color.y = isEdge(uv, v0, v0, v0, v0);
-			color.y = isEdge(uv, va, vb, vc, vd);
+			float edge = isEdge(uv, va, vb, vc, vd);
+
+			color.y = edge;
+			
 			
 			float light = sky_light((rs + t*rv).y);
 			light *= 1.0 - 0.5 * calcOcc(uv, va, vb, vc, vd);
 			color *= light;
+
+			// for getting the voxel the mouse is hovering over
+			if (hover_voxel(iMouse.xy, gl_FragCoord.xy,
+					iso_dir, rotation, i, j, k)) {
+				hover_color.y = 1.0;
+			}
 		}
 	}
+
+
 	
-	gl_FragColor = vec4(color, 1.0);
+	
+	gl_FragColor = vec4(color + hover_color, 1.0);
 #if DEBUG
 	gl_FragColor = vec4(debugColor, 1.0);
 #endif
