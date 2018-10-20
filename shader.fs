@@ -284,7 +284,8 @@ float mousePos(in vec2 mouse, in vec2 st) {
 		smoothstep(y, y + radius, st.y));
 }
 
-void get_edge_vectors( vec3 n_dir, vec3 u_dir, vec3 v_dir, vec3 pos, out vec4 va, out vec4 vc) {
+void get_edge_vectors( 	vec3 n_dir, vec3 u_dir, vec3 v_dir, vec3 pos, 
+						out vec4 va, out vec4 vc) {
 
 	vec3 vax = pos - v_dir;
 	vec3 vay = pos + v_dir;
@@ -301,6 +302,23 @@ void get_edge_vectors( vec3 n_dir, vec3 u_dir, vec3 v_dir, vec3 pos, out vec4 va
 	vc = vec4(map(vcx), map(vcy), map(vcz), map(vcw));
 }
 
+void get_corner_vectors( 	vec3 n_dir, vec3 u_dir, vec3 v_dir, vec3 pos, 
+							out vec4 vb, out vec4 vd) {
+	vec3 vbx = pos - v_dir - u_dir;
+	vec3 vby = pos + v_dir - u_dir;
+	vec3 vbz = pos + v_dir + u_dir;
+	vec3 vbw = pos - v_dir + u_dir;
+
+	vb = vec4(map(vbx), map(vby), map(vbz), map(vbw));
+
+	vec3 vdx = pos + n_dir - v_dir - u_dir;
+	vec3 vdy = pos + n_dir + v_dir - u_dir;
+	vec3 vdz = pos + n_dir + v_dir + u_dir;
+	vec3 vdw = pos + n_dir - v_dir + u_dir;
+
+	vd = vec4(map(vdx), map(vdy), map(vdz), map(vdw));
+}
+
 void find_surrounding_voxels(	vec3 n_dir, vec3 u_dir, vec3 v_dir, int i, int j, int k,
 								out vec4 va, out vec4 vb, out vec4 vc, out vec4 vd) {
 	// first find every voxel surrounding the i,j,k voxel
@@ -308,6 +326,7 @@ void find_surrounding_voxels(	vec3 n_dir, vec3 u_dir, vec3 v_dir, int i, int j, 
 	vec3 pos = vec3(float(i), float(j), float(k));
 
 	get_edge_vectors(n_dir, u_dir, v_dir, pos, va, vc);
+	get_corner_vectors(n_dir, u_dir, v_dir, pos, vb, vd);
 }
 
 float maxcomp( in vec4 v ) {
@@ -319,20 +338,42 @@ float isEdge( in vec2 uv, vec4 va, vec4 vb, vec4 vc, vec4 vd)
 	vec2 st = 1.0 - uv;
 
 	// sides
-	vec4 wb = smoothstep( 0.88, 0.95, vec4(	st.y,
+	vec4 wb = smoothstep( 0.85, 0.95, vec4(	st.y,
 											uv.y,
 											st.x,
 											uv.x) ) * (1.0 - va + va * vc);
 
-	/*
+	
 	// corners
-	vec4 wc = smoothstep( 0.88, 0.95, vec4( uv.x * uv.y,
+	vec4 wc = smoothstep( 0.85, 0.95, vec4( st.x * st.y,
 											st.x * uv.y,
-											st.x * st.y,
+											uv.x * uv.y,
 											uv.x * st.y) ) * (1.0 - vb + vd * vb);
-	*/
-	vec4 wc = vec4(0.0);
+	
 	return maxcomp( max(wb, wc) );
+}
+
+float sky_light(float y_pos) {
+	return y_pos / (float(CHUNK_H) * VOX_H);
+}
+
+float calcOcc(	vec2 uv,
+				vec4 va, vec4 vb, vec4 vc, vec4 vd) {
+	vec2 st = 1.0 - uv;
+
+	// edges
+	vec4 wa = vec4( st.y, uv.y, st.x, uv.x) * vc;
+
+	// corners
+	vec4 wb = vec4( st.x * st.y,
+					st.x * uv.y,
+					uv.x * uv.y,
+					uv.x * st.y) * vd * (1.0 - vc.xzyw) * (1.0 - vc.zywx);
+
+	//wb = vec4(0.0);
+	return 	wa.x + wa.y + wa.z + wa.w + 
+			wb.x + wb.y + wb.z + wb.w;
+
 }
 
 void main()
@@ -412,11 +453,10 @@ void main()
 			vec4 v0 = vec4(0.0);
 			//color.y = isEdge(uv, v0, v0, v0, v0);
 			color.y = isEdge(uv, va, vb, vc, vd);
-			if (t < 0.0) {
-				color.z = 1.0;
-				color.y = 0.0;
-			}
 			
+			float light = sky_light((rs + t*rv).y);
+			light *= 1.0 - 0.5 * calcOcc(uv, va, vb, vc, vd);
+			color *= light;
 		}
 	}
 	

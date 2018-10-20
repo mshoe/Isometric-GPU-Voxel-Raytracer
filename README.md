@@ -1,6 +1,7 @@
 # Isometric-GPU-Voxel-Raytracer
-![pic](cool_parking_lot.PNG)
-A parking lot rendered from my engine.
+![pic](cool_parking_lot_occ.PNG)
+
+A parking lot looking building rendered from my engine.
 
 Using:
 - ModernGL for the OpenGL interface
