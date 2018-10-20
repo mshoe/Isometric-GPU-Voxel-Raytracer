@@ -1,5 +1,5 @@
 # Isometric-GPU-Voxel-Raytracer
-![alt text](https://github.com/mshoe/Isometric-GPU-Voxel-Raytracer/cool_parking_lot.png)
+(cool_parking_lot.png)
 A parking lot rendered from my engine.
 
 Using:
