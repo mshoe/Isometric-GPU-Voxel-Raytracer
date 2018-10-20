@@ -1,5 +1,5 @@
 # Isometric-GPU-Voxel-Raytracer
-![cool parking lot](cool_parking_lot.png)
+![pic](cool_parking_lot.PNG)
 A parking lot rendered from my engine.
 
 Using:
