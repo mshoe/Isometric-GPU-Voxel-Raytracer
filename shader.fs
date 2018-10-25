@@ -1,10 +1,19 @@
+/*
+ * Author: Mshoe
+ */
+
 #version 430
-
-
 
 uniform vec2 iResolution; // viewport resolution (in pixels)
 uniform vec4 iMouse; // Mouse pixel coords. xy: current, zw: click
 uniform float iTime; // shader playback time (in seconds)
+
+uniform mat4 iCamera;
+
+const vec3 camera_from = iCamera[3].xyz;
+const vec3 camera_dir = -iCamera[2].xyz;
+const vec3 camera_right = iCamera[0].xyz;
+const vec3 camera_up = iCamera[1].xyz;
 
 
 #define DEBUG 0
@@ -17,6 +26,8 @@ const float VOX_H = 20.0;
 
 const int CHUNK_W = 50;
 const int CHUNK_H = 10;
+
+//usamplerBuffer voxel_chunk;
 
 const vec3 VEC_NULL = vec3(0.0, 0.0, 0.0);
 const vec3 VEC_POS_X = vec3(1.0, 0.0, 0.0);
@@ -60,6 +71,23 @@ float plane_intersect(float s, float v, float r) {
    // intersection between line and a plane
    return (r - s) / v;
 }
+
+/*
+mat4 lookat(vec3 from, vec3 to, vec3 tmp_up) {
+	// move this to the cpu later and pass it as a uniform
+	mat4 res;
+	vec3 forward = normalize(from - to);
+	vec3 right = cross(tmp_up, forward);
+	vec3 up = cross(forward, right);
+
+	res[0] = vec4(right, 0.0);
+	res[1] = vec4(up, 0.0);
+	res[2] = vec4(forward, 0.0);
+	res[3] = vec4(from, 1.0);
+
+	return res;
+}
+*/
 
 void voxel_plane_intersect(float s, float v, float r0, float r1,
                            out float t) {
@@ -162,13 +190,20 @@ void voxel_intersect(vec3 rs, vec3 rv,
 	return;
 }
 
-void construct_ray(vec2 frag_coord, vec3 iso_dir, mat3 rotation,
+void construct_ray(vec2 frag_coord, vec3 iso_dir,
                    out vec3 rs, out vec3 rv) {
    // constructs a ray described by the equation P(t) = S + tV
    vec2 st = frag_coord;// / iResolution * 100.0;
+
+   //mat4 camera = lookat(camera_from, camera_to, vec3(0.0, 1.0, 0.0));
    
-   rs = rotation * vec3(st.x , st.y + iResolution.y / 1.5, -1000.0);
-   rv = rotation * iso_dir;
+   //rs = rotation * vec3( st.x + offset.x, st.y + offset.y, -1000.0);
+   //rv = rotation * iso_dir;
+
+   rs = camera_from;
+   rs += (-iResolution.x / 2.0 + st.x) * camera_right;
+   rs += (-iResolution.y / 2.0 + st.y) * camera_up;
+   rv = camera_dir;
 }
 
 int get_in_bounds(int x, int low, int high) {
@@ -232,9 +267,9 @@ void ray_trace(vec3 rs, vec3 rv,
 	tz = sCellz / abs(rv.z);
 
 
-	while (	0 <= i && i <= CHUNK_W &&
-	      	0 <= j && j <= CHUNK_H &&
-	      	0 <= k && k <= CHUNK_W) {
+	while (	0 <= i && i < CHUNK_W &&
+	      	0 <= j && j < CHUNK_H &&
+	      	0 <= k && k < CHUNK_W) {
 	  
 		// terminating condition
 		blockID = simple_world(i, j, k);
@@ -362,7 +397,7 @@ float calcOcc(	vec2 uv,
 			wb.x + wb.y + wb.z + wb.w;
 }
 
-bool hover_voxel(	vec2 mouse, vec2 fc, vec3 iso_dir, mat3 rotation,
+bool hover_voxel(	vec2 mouse, vec2 fc, vec3 iso_dir,
 					int st_i, int st_j, int st_k) {
 	// create a glow around the mouse cursor
 
@@ -378,7 +413,7 @@ bool hover_voxel(	vec2 mouse, vec2 fc, vec3 iso_dir, mat3 rotation,
 	}
 
 	vec3 rs, rv, rs_onvoxel;
-	construct_ray(mouse.xy, iso_dir, rotation, rs, rv);
+	construct_ray(mouse.xy, iso_dir, rs, rv);
 
 	float t;
 	int i, j, k;
@@ -412,15 +447,10 @@ void main()
 
 	vec3 rs, rv; // the vectors describing the ray P(t) = S + tV
 	vec3 iso_dir = normalize(vec3(0.0, -0.5, 1.0));
-	mat3 rotation;
-	float angle = radians(-45.0);
-	rotation[0] = vec3(cos(angle), 0.0, -sin(angle));
-	rotation[1] = vec3(0.0, 1.0, 0.0);
-	rotation[2] = vec3(sin(angle), 0.0, cos(angle));
 
 	//rotation = mat3(1.0);
 	// first construct the ray (rs, rv)
-	construct_ray(gl_FragCoord.xy, iso_dir, rotation, rs, rv);
+	construct_ray(gl_FragCoord.xy, iso_dir, rs, rv);
 
 	// then find the voxel in the voxel grid the ray starts at
 	float t;
@@ -467,7 +497,7 @@ void main()
 
 			// for getting the voxel the mouse is hovering over
 			if (hover_voxel(iMouse.xy, gl_FragCoord.xy,
-					iso_dir, rotation, i, j, k)) {
+					iso_dir, i, j, k)) {
 				hover_color.y = 1.0;
 			}
 		}
